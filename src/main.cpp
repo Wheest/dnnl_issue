@@ -94,6 +94,7 @@ void run_network()
     auto conv1_user_bias_memory
         = memory({{conv1_bias_tz}, dt::f32, tag::x}, eng);
     write_to_dnnl_memory(biases.data(), conv1_user_bias_memory);
+    auto user_dst_memory = memory({{conv1_dst_tz}, dt::f32, tag::nchw}, eng);
 
     auto conv1_src_md = memory::desc({conv1_src_tz}, dt::f32, tag::any);
     auto conv1_bias_md = memory::desc({conv1_bias_tz}, dt::f32, tag::any);
@@ -108,10 +109,7 @@ void run_network()
     auto conv1_prim_desc = convolution_forward::primitive_desc(conv1_desc, eng);
     auto conv1_src_memory = user_src_memory;
 
-    std::vector<float> outputs(num_filters * out_h * out_w);
-    auto conv1_dst_memory = memory(conv1_prim_desc.dst_desc(), eng,
-                                   outputs.data());
-
+    // reorder src to HW specific format
     if (conv1_prim_desc.src_desc() != user_src_memory.get_desc()) {
         conv1_src_memory = memory(conv1_prim_desc.src_desc(), eng);
         net.push_back(reorder(user_src_memory, conv1_src_memory));
@@ -119,6 +117,7 @@ void run_network()
                 {DNNL_ARG_TO, conv1_src_memory}});
     }
 
+    // reorder weights to HW specific format (offline)
     auto conv1_weights_memory = user_weights_memory;
     if (conv1_prim_desc.weights_desc() != user_weights_memory.get_desc()) {
         conv1_weights_memory = memory(conv1_prim_desc.weights_desc(), eng);
@@ -126,6 +125,10 @@ void run_network()
                 .execute(s, user_weights_memory, conv1_weights_memory);
     }
 
+    // create HW specific buffer for dst
+    auto conv1_dst_memory = memory(conv1_prim_desc.dst_desc(), eng);
+
+    // run convolution
     std::cout << "creating network " << std::endl;
     net.push_back(convolution_forward(conv1_prim_desc));
     net_args.push_back({{DNNL_ARG_SRC, conv1_src_memory},
@@ -133,12 +136,19 @@ void run_network()
                         {DNNL_ARG_BIAS, conv1_user_bias_memory},
                         {DNNL_ARG_DST, conv1_dst_memory}});
 
+    // reorder dst to HW specific format
+    net.push_back(reorder(conv1_dst_memory, user_dst_memory));
+    net_args.push_back({{DNNL_ARG_FROM, conv1_dst_memory},
+            {DNNL_ARG_TO, user_dst_memory}});
+
     int times = 1000;
     assert(net.size() == net_args.size() && "something is missing");
+    std::vector<float> outputs(num_filters * out_h * out_w);
     for(int j = 0; j < times; ++j)
     {
         for (size_t i = 0; i < net.size(); ++i)
             net.at(i).execute(s, net_args.at(i));
+        read_from_dnnl_memory(outputs.data(), user_dst_memory);
         for (int i = 0; i < outputs.size(); i++)
             assert(((outputs[i] - targets[i]) < 1e-9));
 
