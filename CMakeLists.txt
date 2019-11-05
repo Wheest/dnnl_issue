@@ -1,0 +1,23 @@
+cmake_minimum_required(VERSION 3.5)
+project(MWE)
+
+if((CMAKE_CXX_COMPILER_ID MATCHES GNU) OR (CMAKE_CXX_COMPILER_ID MATCHES Clang))
+  set(CMAKE_CXX_FLAGS         "${CMAKE_CXX_FLAGS} -std=c++14")
+  set(CMAKE_CXX_FLAGS_DEBUG   "-O0 -g3")
+  set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG")
+  set(CMAKE_CXX_STANDARD 17)
+  set(CMAKE_CXX_STANDARD_REQUIRED ON)
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Ofast")
+endif()
+
+set (CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/")
+
+find_package(DNNL REQUIRED)
+if(DNNL_FOUND)
+  list(APPEND MWE_INCLUDE_DIRS PUBLIC ${DNNL_INCLUDE_DIR})
+  list(APPEND MWE_LINKER_LIBS PUBLIC ${DNNL_LIBRARIES})
+else()
+  message(SEND_ERROR "DNNL library not found")
+endif()
+
+add_subdirectory(src)

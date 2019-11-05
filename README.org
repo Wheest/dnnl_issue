@@ -1,0 +1,16 @@
+#+TITLE: DNNL MWE
+#+BEGIN_QUOTE
+A minimum working example of an issue I was having with the [[https://github.com/intel/mkl-dnn][Intel DNNL]].
+#+END_QUOTE
+
+** Building
+I build DNNL from source, and placed it in the directory ~\~/tools/mkl-dnn~.  It is installed globally with =sudo make install=
+
+The example can run with:
+#+BEGIN_SRC sh
+mkdir _build
+cd _build
+cmake ..
+make
+./src/main
+#+END_SRC
